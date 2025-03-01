@@ -1,0 +1,71 @@
+filebeat.inputs:
+- type: tcp
+  host: "0.0.0.0:5140"
+  enabled: true
+  max_message_size: 10MB
+  json.keys_under_root: true
+  json.add_error_key: true
+  json.message_key: message
+
+processors:
+  - add_host_metadata: ~
+  - add_docker_metadata: ~
+  - add_cloud_metadata: ~
+  - add_fields:
+      target: ''
+      fields:
+        environment: 'development'
+
+  # Parse the JSON in the message field
+  - decode_json_fields:
+      fields: ["message"]
+      target: ""
+      process_array: false
+      max_depth: 10
+      overwrite_keys: true
+      add_error_key: true
+      when:
+        has_fields: ['message']
+
+setup.template.settings:
+  index.number_of_shards: 1
+  index.number_of_replicas: 0
+
+# Configure Kibana endpoint
+setup.kibana:
+  host: "kibana:5601"
+  # Use the following settings to make it more tolerant of startup timing
+  retry.enabled: true
+  retry.interval: 10s
+  retry.max_attempts: 5
+
+# Disable automatic dashboard setup for now to avoid startup issues
+# You can run setup commands manually once the system is up
+setup.dashboards.enabled: false
+
+# Disable index pattern setup for now
+setup.ilm.enabled: false
+
+output.elasticsearch:
+  hosts: ["elasticsearch:9200"]
+  indices:
+    - index: "finance-%{+yyyy.MM.dd}"
+      when.equals:
+        service: "finance"
+    - index: "authentication-%{+yyyy.MM.dd}"
+      when.equals:
+        service: "authentication"
+    - index: "subscription-%{+yyyy.MM.dd}" 
+      when.equals:
+        service: "subscription"
+    - index: "logs-%{+yyyy.MM.dd}"
+
+# Configure retry for Elasticsearch connection
+  max_retries: 5
+  retry.on_timeout: true
+  retry.interval: 5
+
+# Define how to monitor the Filebeat service
+monitoring.enabled: true
+monitoring.elasticsearch:
+  hosts: ["elasticsearch:9200"]
